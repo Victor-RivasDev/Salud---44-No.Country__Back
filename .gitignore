@@ -2,8 +2,7 @@
 /dist
 /node_modules
 /build
-/prisma
-/src/prisma
+/prisma/migrations
 # Logs
 logs
 *.log
@@ -41,6 +40,7 @@ lerna-debug.log*
 .env.test.local
 .env.production.local
 .env.local
+docker-compose.yml
 
 # temp directory
 .temp

@@ -1,4 +1,4 @@
-import { Injectable, NotFoundException, BadRequestException, Logger } from '@nestjs/common';
+import { Injectable, NotFoundException, BadRequestException, Logger, HttpException } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 import { CreateTeleconsultationDto } from './dto/create-teleconsultation.dto';
 import { StartSessionDto, SessionResponseDto } from './dto/start-session.dto';
@@ -402,70 +402,84 @@ export class TeleconsultationService {
    * Unirse a una sesión de teleconsulta existente
    */
   async joinSession(joinDto: JoinSessionDto): Promise<JoinSessionResponseDto> {
-    try {
-      // Buscar la teleconsulta
-      const teleconsultation = await this.prisma.teleconsultations.findUnique({
-        where: { id: joinDto.teleconsultationId },
-        include: {
-          patient: true,
-          medic: true,
-          appointment: true
-        }
-      });
-
-      if (!teleconsultation) {
-        throw new NotFoundException('Teleconsulta no encontrada');
+  try {
+    // Buscar la teleconsulta con Prisma
+    const teleconsultation = await this.prisma.teleconsultations.findUnique({
+      where: { id: joinDto.teleconsultationId },
+      include: {
+        patient: true,
+        medic: true,
+        appointment: true
       }
+    });
 
-      if (teleconsultation.status !== TeleconsultationStatus.ACTIVE) {
-        throw new BadRequestException('La teleconsulta no está activa. No se puede unir a la sesión.');
-      }
+    if (!teleconsultation) {
+      throw new NotFoundException('Teleconsulta no encontrada');
+    }
 
-      if (!teleconsultation.sessionId || !teleconsultation.roomId) {
-        throw new BadRequestException('La sesión no ha sido iniciada correctamente');
-      }
+    if (teleconsultation.status !== TeleconsultationStatus.ACTIVE) {
+      throw new BadRequestException('La teleconsulta no está activa. No se puede unir a la sesión.');
+    }
 
-      // Generar ID único para el participante
-      const participantId = uuidv4();
+    if (!teleconsultation.sessionId || !teleconsultation.roomId) {
+      throw new BadRequestException('La sesión no ha sido iniciada correctamente');
+    }
 
-      // Crear información del participante
-      const participantInfo: ParticipantInfo = {
-        participantId,
-        name: joinDto.participantName,
-        role: joinDto.role,
-        joinedAt: new Date(),
-        isConnected: true
-      };
+    // Generar ID único para el participante
+    const participantId = uuidv4();
 
-      // Agregar participante al mapa de sesiones
-      if (!this.sessionParticipants.has(teleconsultation.sessionId)) {
-        this.sessionParticipants.set(teleconsultation.sessionId, new Map());
-      }
-      
-      const sessionMap = this.sessionParticipants.get(teleconsultation.sessionId);
-      sessionMap.set(participantId, participantInfo);
+    // Crear información del participante
+    const participantInfo: ParticipantInfo = {
+      participantId,
+      name: joinDto.participantName,
+      role: joinDto.role,
+      joinedAt: new Date(),
+      isConnected: true
+    };
 
-      // Obtener lista de todos los participantes
-      const participants = Array.from(sessionMap.values());
+    // --- SOLUCIÓN AL ERROR TS18048 ---
+    
+    // 1. Intentamos obtener el mapa de la sesión específica
+    let sessionMap = this.sessionParticipants.get(teleconsultation.sessionId);
 
-      // Preparar respuesta
-      const response: JoinSessionResponseDto = {
-        participantId,
-        sessionId: teleconsultation.sessionId,
-        roomId: teleconsultation.roomId,
-        webrtcConfig: this.getWebRTCConfig(),
-        participants,
-        expiresAt: new Date(Date.now() + 2 * 60 * 60 * 1000) // 2 horas
-      };
+    // 2. Si no existe, lo inicializamos y lo guardamos en el mapa principal
+    if (!sessionMap) {
+      sessionMap = new Map<string, ParticipantInfo>();
+      this.sessionParticipants.set(teleconsultation.sessionId, sessionMap);
+    }
 
-      this.logger.log(`Participante ${joinDto.participantName} (${participantId}) se unió a la sesión ${teleconsultation.sessionId}`);
-      return response;
+    // 3. Ahora sessionMap está garantizado. Agregamos al participante.
+    sessionMap.set(participantId, participantInfo);
 
-    } catch (error) {
-      this.logger.error(`Error al unirse a la sesión: ${error.message}`);
+    // 4. Convertimos los valores a Array (seguro, porque sessionMap no es undefined)
+    const participants = Array.from(sessionMap.values());
+
+    // --- FIN DE LA SOLUCIÓN ---
+
+    // Preparar respuesta
+    const response: JoinSessionResponseDto = {
+      participantId,
+      sessionId: teleconsultation.sessionId,
+      roomId: teleconsultation.roomId,
+      webrtcConfig: this.getWebRTCConfig(),
+      participants,
+      expiresAt: new Date(Date.now() + 2 * 60 * 60 * 1000) // 2 horas
+    };
+
+    this.logger.log(`Participante ${joinDto.participantName} (${participantId}) se unió a la sesión ${teleconsultation.sessionId}`);
+    return response;
+
+  } catch (error) {
+    // Es buena práctica relanzar excepciones de NestJS (NotFound, BadRequest) 
+    // para que el Global Exception Filter las capture correctamente.
+    if (error instanceof HttpException) {
       throw error;
     }
+    
+    this.logger.error(`Error al unirse a la sesión: ${error.message}`);
+    throw error;
   }
+}
 
   /**
    * Obtener participantes de una sesión
