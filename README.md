@@ -13,14 +13,17 @@ API REST para un sistema de gestión de pacientes y doctores, desarrollada duran
 
 ## Funcionalidades
 
-- [ESCRIBE AQUÍ: por ejemplo, registro e inicio de sesión de usuarios]
-- [ESCRIBE AQUÍ: por ejemplo, gestión de pacientes]
-- [ESCRIBE AQUÍ: por ejemplo, gestión de doctores]
+- Autenticación de usuarios con JWT.
+- Gestión de pacientes y doctores.
+- Gestión de citas médicas (appointments).
+- Historias clínicas (clinical records).
+- Teleconsultas.
 
 ## Mi participación
 
-- [ESCRIBE AQUÍ: qué módulos o endpoints desarrollaste tú]
-- [ESCRIBE AQUÍ: qué resolviste: autenticación, base de datos, pruebas, documentación...]
+- Desarrollé el módulo de historias clínicas (clinical records).
+- Desarrollé el módulo de citas (appointments).
+- Participé en una parte del módulo de teleconsulta.
 - Trabajo en equipo con Git/GitHub: ramas, revisión de código y resolución de conflictos de integración.
 
 ## Requisitos
